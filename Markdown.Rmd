@@ -1,0 +1,276 @@
+---
+title: "Reproducible Research.Peer-graded Assignment: Course Project 1"
+author: "Ivano Squiccimarro"
+date: '2022-03-12'
+output: html_document
+---
+
+# 1.Introduction
+
+
+ It is now possible to collect a large amount of data about personal movement using activity monitoring devices such as a Fitbit, Nike Fuelband, or Jawbone Up. These type of devices are part of the “quantified self” movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. But these data remain under-utilized both because the raw data are hard to obtain and there is a lack of statistical methods and software for processing and interpreting the data.
+
+This assignment makes use of data from a personal activity monitoring device. This device collects data at 5 minute intervals through out the day. The data consists of two months of data from an anonymous individual collected during the months of October and November, 2012 and include the number of steps taken in 5 minute intervals each day.
+
+
+# 2.Data Processing
+
+After reading data and loading ggplot package, the date column is transformed in date format.
+
+```{r setup }
+knitr::opts_chunk$set(echo = TRUE,message = FALSE,warning = FALSE)
+
+file 		<- read.csv("C://Users//ivano//Desktop//repdata_data_activity//activity.csv")
+
+library(ggplot2)
+file$date 	<- as.Date(file$date, format="%Y-%m-%d")
+```
+
+## Mean of steps each day
+
+Once the previous step was completed, three vectors are created calculating sum,mean and median of steps within each day and then merged in one single dataframe.
+ 
+```{r}
+days 			<- levels(factor(file$date))
+len  			<- seq(1,length(days), by=1)
+
+steps 		<- c()
+sum.of.day 		<- c()
+mean.of.day 	<- c()
+median.of.day 	<- c()
+median		<- c()
+mean			<- c()
+
+for (i in len)
+{
+sum.of.day			<- sum(subset(file, date==days[i])$steps)
+mean.of.day			<- mean(subset(file, date==days[i])$steps,na.rm=TRUE)
+median.of.day		<- median(as.numeric(levels(factor(subset(file, date==days[i])$steps))),na.rm=TRUE)
+
+steps				<- c(steps,sum.of.day)
+mean				<- c(mean,mean.of.day)
+median			<- c(median,median.of.day)
+}
+
+
+df 		<- as.data.frame(cbind(days,steps,mean,median))
+df$steps 	<- as.numeric(df$steps)
+df$mean 	<- as.integer(df$mean)
+df$median 	<- as.integer(df$median)
+df$days 	<- as.Date(df$days, format="%Y-%m-%d")
+
+p1 <- ggplot(df) + geom_hline(yintercept = mean(steps, na.rm=TRUE), colour="red") 
+p1 <- p1	     + geom_histogram(aes(x=days,y=steps),bin=length(days),colour="blue", fils="ivory", stat="identity")
+p1 <- p1	     + ggtitle("Total Steps each day")
+
+```
+Here the corresponding table and plot:
+```{r}
+head(df)
+```
+```{r}
+p1
+```
+
+
+
+## Mean vs Median
+
+
+After that melting dataframe using days as id the double plot was created in order to compare the median and mean value of steps taken whitin each day:
+
+```{r}
+
+library(reshape2)
+
+df$steps	  <- NULL 
+new.df	    <- melt(df, id.vars="days")
+copy.new.df	<-new.df	
+
+p2 		<- ggplot(new.df,aes(days,value))
+p2		<- p2 + geom_histogram(aes(x=days,y=value,colour = variable), stat="identity")
+p2 		<- p2 + ggtitle("Median and Mean Steps each day")
+p2 		<- p2 + facet_wrap(.~variable) + stat_smooth()
+p2 		<- p2 + stat_smooth(aes(colour = variable))
+
+
+```
+
+```{r}
+p2
+```
+
+## Steps vs Intervals
+
+
+After that a new dataframe is created subsetting the previous one and making the average steps for each 5 minute interval. Here the corresponding line plot:
+
+```{r}
+
+
+interval 			<- levels(factor(file$interval))
+len 				<- seq(1,length(interval),by=1)
+avg.steps 			<- c() 
+mean				<- c()
+
+for(i in len)
+{
+mean				<- mean(subset(file,interval == interval[i])$steps, na.rm=TRUE)
+avg.steps			<- c(avg.steps,mean)
+
+}
+
+df 				<- as.data.frame(cbind(avg.steps,interval))
+df$interval 		<- as.integer(df$interval)
+df$avg.steps 		<- as.numeric(df$avg.steps)
+
+p3 <- ggplot(data=df,aes(x=interval,y=avg.steps))+ geom_point(colour="red")
+p3 <- p3 + geom_line(group=1, colour="blue",alpha=0.5)
+p3 <- p3 + ggtitle("Mean of steps made in each interval")
+p3 <- p3 + coord_cartesian(ylim=c(0,max(avg.steps)),xlim=c(0,2400))
+p3 <- p3 + geom_smooth(method="loess",colour="green")
+
+head(df)
+p3
+
+```
+
+## Substituting the NAs
+
+This result can be severely being affected by the great percentage of missing value
+
+```{r}
+number.of.nas	     <- length(file[!complete.cases(file$steps),]$steps)
+percentage.of.nas  <- round(100*(number.of.nas/nrow(file)),2)
+```
+ 
+```{r}
+head(file)
+number.of.nas
+percentage.of.nas
+```
+
+
+
+For this reason I tried in substituting the NAs values using the mean value of each intervals across all the days. The reason behind this choice is because the missing value don't occur randomly but across the all extension of a day. 
+
+```{r}
+new.df <- NULL
+
+new.file <- file
+
+mean.of.day 	<- c()
+median.of.day 	<- c()
+new.median		<- c()
+new.mean		<- c()
+nr 			<- seq(1,nrow(new.file),by=1)
+
+df 				<- as.data.frame(cbind(avg.steps,interval))
+df$interval 		<- as.integer(df$interval)
+
+for(i in nr)
+{
+if (is.na(new.file$steps[i])) 
+{new.file$steps[i] <- subset(df,df$interval==new.file$interval[i])$avg.steps}
+}
+
+new.file$steps	<- as.numeric(new.file$steps)
+
+days 			<- levels(factor(new.file$date))
+len  			<- seq(1,length(days), by=1)
+
+
+for (i in len)
+{
+mean.of.day			<- mean(subset(new.file, date==days[i])$steps)
+median.of.day		<- median(as.numeric(levels(factor(subset(new.file, date==days[i])$steps))))
+
+new.mean			<- c(new.mean,mean.of.day)
+new.median			<- c(new.median,median.of.day)
+}
+
+df.subst.nas			<- as.data.frame(cbind(days,new.mean,new.median))
+df.subst.nas			<- melt(df.subst.nas, id.vars="days")
+df.subst.nas$value		<- as.integer(df.subst.nas$value)
+df.subst.nas$days 		<- as.Date(df.subst.nas$days, format="%Y-%m-%d")
+
+copy.new.df				<-copy.new.df[complete.cases(copy.new.df$value),]
+
+complete.df 	<- rbind(df.subst.nas,copy.new.df)
+complete.df$value <- as.integer(complete.df$value)
+
+plot4 <- ggplot(data=complete.df,aes(x = days, fill = variable))
+plot4 <- plot4 + geom_histogram(aes(colour=variable), alpha=0.5) 
+plot4 <- plot4 + facet_grid(variable~.)
+
+```
+
+Here the stacked-histogram 
+```{r include= FALSE}
+head(complete.df)
+plot4
+```
+
+
+## Weekdays vs Weekends
+The same data frame is then divided in two: in the first with only the records in weekends and the second with only records of weekdays. 
+The two new dataframe were processed in a similar way as before for the line plot for interval
+
+
+```{r}
+
+x 		<- seq(new.file$date[1],new.file$date[nrow(new.file)],by=1)
+
+logic1 <- format(x,"%u") %in% c(6,7)
+logic2 <- format(x,"%u") %in% c(1,2,3,4,5)
+
+
+weekdays <- new.file[logic2,] 
+weekend  <- new.file[logic1,]
+
+
+interval 			<- levels(factor(weekdays$interval))
+len 				<- seq(1,length(interval),by=1)
+weekend.avg.steps		<- c() 
+weekdays.avg.steps	<- c() 
+mean				<- c()
+
+for(i in len)
+{
+mean				<- mean(subset(weekdays,interval == interval[i])$steps)
+weekdays.avg.steps	<- c(weekdays.avg.steps,mean)
+
+mean				<- mean(subset(weekend,interval == interval[i])$steps)
+weekend.avg.steps		<- c(weekend.avg.steps,mean)
+
+}
+
+df 				<- as.data.frame(cbind(weekend.avg.steps,weekdays.avg.steps,interval))
+df$interval 		<- as.integer(df$interval)
+```
+
+```{r include= FALSE}
+par(mfrow=c(1,2))
+plot(x= df$interval,y=df$weekdays.avg.steps,ylab="Average steps in weekdays" ,xlab="interval(5 min)",type="l",main="Comparison beetween weekdays and weekend average steps by interval")
+abline(h=mean(weekdays.avg.steps),lty=2,lwd=2, col="red")
+legend(1,200,legend=c("mean"),col=c("red"),lty=2,lwd=2,cex=1.02)
+
+plot(x= df$interval,y=df$weekend.avg.steps,ylab="Average steps in weekend",xlab="interval(5 min)",type="l",main="Comparison beetween weekdays and weekend average steps by interval", col="blue")
+abline(h=mean(weekend.avg.steps), lty=2,lwd=2, col="red")
+legend(1,200,legend=c("mean"),col=c("red"),lty=2,lwd=2,cex=1.02)
+```
+
+# 3. Conclusion 
+
+Seeing the great difference between data frame with and without NAs I would sencerely recommend a second thought before using this strategy. In addition, I would also doubt that every substitution of value with whatsoever strategy could led to a reliable result. I would be more inclined to think that studying the possible pattern of "day without value" is a better way to perform this kind of analysis.  
+
+
+
+
+
+
+
+
+
+
+
